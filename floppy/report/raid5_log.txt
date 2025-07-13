@@ -1,0 +1,14 @@
+[2025-07-12 10:35:16] Sector 2: Checksum mismatch on floppy A
+[2025-07-12 10:35:16] Sector 2: Checksum mismatch on floppy B
+[2025-07-12 10:35:16] Sector 2: Both floppy A and B have invalid data
+[2025-07-12 10:35:16] Sector 3: Checksum mismatch on floppy A
+[2025-07-12 10:35:16] Sector 3: Checksum mismatch on floppy B
+[2025-07-12 10:35:16] Sector 3: Both floppy A and B have invalid data[2025-07-12 11:11:44] Sector -865070320: Too many errors to recover
+[2025-07-12 11:15:35] Sector -1080782064: Too many errors to recover
+[2025-07-12 11:17:24] Sector 1641157392: Too many errors to recover
+[2025-07-12 11:21:21] Sector -1545465072: Invalid negative sector
+[2025-07-12 11:21:21] Sector -1545465072: Invalid negative sector
+[2025-07-12 11:23:16] Sector -1783221488: Invalid negative sector
+[2025-07-12 11:23:16] Sector -1783221488: Invalid negative sector
+[2025-07-12 11:28:25] Sector 256: Too many errors to recover
+[2025-07-12 11:30:49] Sector 256: Too many errors to recover
