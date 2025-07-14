@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include <sys/stat.h> // for mkdir
+#include <sys/stat.h> 
 #include <errno.h>
 
 #define FLOPPY_A "/dev/loop7"
@@ -19,7 +19,7 @@
 const char *floppies[NUM_DISKS] = {FLOPPY_A, FLOPPY_B, FLOPPY_C};
 
 void log_sector_error(const char *message, int sector) {
-    mkdir("report", 0755);  // Ensure report/ exists
+    mkdir("report", 0755);  
 
     FILE *log_file = fopen("report/raid5_log.txt", "a");
     if (!log_file) {
@@ -66,12 +66,10 @@ void write_raid5_floppy(const char *data, int *sector, int *parity_disk, int *nu
     }
     if (num_disks_val != NUM_DISKS) {
         fprintf(stderr, "Warning: num_disks (%d) does not match expected NUM_DISKS (%d)\n", num_disks_val, NUM_DISKS);
-        // You can decide to accept or reject here
     }
     int fd[NUM_DISKS];
     off_t offset = (off_t)(sector_val / (num_disks_val - 1)) * SECTOR_SIZE;
 
-    // Open floppy devices for writing
     for (int i = 0; i < NUM_DISKS; i++) {
         fd[i] = open(floppies[i], O_RDWR);
         if (fd[i] < 0) {
@@ -125,7 +123,6 @@ void read_raid5_floppy(char *data, int *sector, int *parity_disk, int *num_disks
     }
     if (num_disks_val != NUM_DISKS) {
         fprintf(stderr, "Warning: num_disks (%d) does not match expected NUM_DISKS (%d)\n", num_disks_val, NUM_DISKS);
-        // Accept or handle accordingly
     }
     int fd[NUM_DISKS];
     off_t offset = (off_t)(sector_val / (num_disks_val - 1)) * SECTOR_SIZE;

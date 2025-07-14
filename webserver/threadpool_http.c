@@ -7,15 +7,15 @@
 #include <signal.h>
 #include <errno.h>
 #include <stdint.h>
+#include <ctype.h>
 
 #define PORT 8080
 #define THREADS 4
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 16384   // Bigger buffer for full requests
 #define RESPONSE_SIZE 8192
 
 extern void cob_init(void);
 
-// COBOL handler takes pointers to buffers and lengths
 extern void http_handler(char *request_data, int *request_len, char *response_data, int32_t *response_len);
 
 typedef struct {
@@ -29,6 +29,39 @@ job_t job_queue[100];
 int job_count = 0;
 int job_index = 0;
 
+// Helper: case-insensitive strstr
+char *strcasestr(const char *haystack, const char *needle) {
+    if (!*needle)
+        return (char *)haystack;
+    for (; *haystack; haystack++) {
+        if (tolower((unsigned char)*haystack) == tolower((unsigned char)*needle)) {
+            const char *h, *n;
+            for (h = haystack, n = needle; *h && *n; h++, n++) {
+                if (tolower((unsigned char)*h) != tolower((unsigned char)*n))
+                    break;
+            }
+            if (!*n)
+                return (char *)haystack;
+        }
+    }
+    return NULL;
+}
+
+// Parse Content-Length header from HTTP headers
+int parse_content_length(const char *headers) {
+    const char *cl_str = "Content-Length:";
+    char *p = strcasestr(headers, cl_str);
+    if (!p) return 0; // no Content-Length header found
+    p += strlen(cl_str);
+
+    // skip whitespace
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    int content_length = 0;
+    sscanf(p, "%d", &content_length);
+    return content_length > 0 ? content_length : 0;
+}
+
 void *worker(void *arg) {
     while (1) {
         pthread_mutex_lock(&job_mutex);
@@ -41,15 +74,48 @@ void *worker(void *arg) {
         pthread_mutex_unlock(&job_mutex);
 
         char buffer[BUFFER_SIZE];
-        int bytes_read = read(job.client_fd, buffer, BUFFER_SIZE - 1);
-        if (bytes_read <= 0) {
-            close(job.client_fd);
-            continue;
-        }
-        buffer[bytes_read] = '\0';
+        int total_read = 0;
+        int content_length = 0;
+        int headers_received = 0;
 
-        int req_len = bytes_read;
-        int32_t resp_len = 0; // Use int32_t explicitly for compatibility
+        while (1) {
+            if (total_read >= (int)(sizeof(buffer) - 1)) {
+                fprintf(stderr, "Request too large, rejecting\n");
+                close(job.client_fd);
+                goto next_job;
+            }
+
+            int n = read(job.client_fd, buffer + total_read, sizeof(buffer) - total_read - 1);
+            if (n <= 0) {
+                close(job.client_fd);
+                goto next_job;
+            }
+            total_read += n;
+            buffer[total_read] = '\0';
+
+            if (!headers_received) {
+                char *headers_end = strstr(buffer, "\r\n\r\n");
+                if (headers_end) {
+                    headers_received = 1;
+                    content_length = parse_content_length(buffer);
+                    int header_len = (int)(headers_end - buffer) + 4;
+
+                    // If no body or full body read, break
+                    if (content_length == 0 || total_read >= header_len + content_length) {
+                        break;
+                    }
+                }
+            } else {
+                char *headers_end = strstr(buffer, "\r\n\r\n");
+                int header_len = (int)(headers_end - buffer) + 4;
+                if (total_read >= header_len + content_length) {
+                    break;
+                }
+            }
+        }
+
+        int req_len = total_read;
+        int32_t resp_len = 0;
         char response[RESPONSE_SIZE];
         memset(response, 0, sizeof(response));
 
@@ -58,7 +124,6 @@ void *worker(void *arg) {
 
         unsigned char *p = (unsigned char *)&resp_len;
         printf("Raw bytes of resp_len: %02X %02X %02X %02X\n", p[0], p[1], p[2], p[3]);
-
         printf("After COBOL call: req_len=%d, resp_len=%d\n", req_len, resp_len);
 
         if (resp_len <= 0 || resp_len > RESPONSE_SIZE) {
@@ -75,7 +140,7 @@ void *worker(void *arg) {
                 ssize_t written = write(job.client_fd, response + total_written, resp_len - total_written);
                 if (written <= 0) {
                     if (errno == EPIPE) {
-                        break; // client closed connection
+                        break;
                     } else {
                         perror("write failed");
                         break;
@@ -86,6 +151,9 @@ void *worker(void *arg) {
         }
 
         close(job.client_fd);
+
+    next_job:
+        ; // continue loop
     }
     return NULL;
 }

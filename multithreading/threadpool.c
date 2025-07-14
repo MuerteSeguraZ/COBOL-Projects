@@ -1,4 +1,3 @@
-// threadpool.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -36,16 +35,14 @@ void* worker(void* arg) {
             break;
         }
 
-        // Get job
         job_t job = pool.jobs[pool.job_index];
         pool.job_index = (pool.job_index + 1) % MAX_JOBS;
         pool.job_count--;
 
         pthread_mutex_unlock(&pool.mutex);
 
-        // Do the work: simple example
         printf("[Thread %lu] Processing job ID: %d\n", pthread_self(), job.job_id);
-        sleep(1);  // simulate work
+        sleep(1); 
     }
     return NULL;
 }
@@ -69,7 +66,6 @@ void init_thread_pool(int num_threads) {
 void submit_job(int job_id) {
     pthread_mutex_lock(&pool.mutex);
 
-    // Add job to queue (simple ring buffer)
     int next_pos = (pool.job_index + pool.job_count) % MAX_JOBS;
     pool.jobs[next_pos].job_id = job_id;
     pool.job_count++;

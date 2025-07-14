@@ -54,17 +54,14 @@ void read_raid5_sector(char *data, int *sector, int *status) {
 
     off_t offset = (off_t)(*sector) * SECTOR_SIZE;
 
-    // Open drives
     for (int i = 0; i < 3; i++) {
         fds[i] = open(drives[i], O_RDONLY);
         if (fds[i] < 0) {
             perror("open");
-            // Continue anyway, treat as missing drive
             valid[i] = 0;
         }
     }
 
-    // Read sectors and verify checksum
     int bad_count = 0;
     for (int i = 0; i < 3; i++) {
         if (fds[i] < 0) {
@@ -102,26 +99,19 @@ void read_raid5_sector(char *data, int *sector, int *status) {
     }
 
     if (bad_count > 1) {
-        // Too many failures, cannot recover
         fprintf(stderr, "Too many corrupted drives at sector %d\n", *sector);
         log_sector_error("Too many corrupted drives, unrecoverable", *sector);
         memset(data, ' ', DATA_SIZE);
-        *status = 2; // corrupted
+        *status = 2;
         return;
     }
 
     if (bad_count == 0) {
-        // All good - determine which drive holds parity for this sector
-        // RAID5 distributes parity rotating among drives per sector:
-        // parity_drive = sector % 3
         int parity_drive = (*sector) % 3;
 
-        // Data drives are the other two
         int data_drive1 = (parity_drive + 1) % 3;
         int data_drive2 = (parity_drive + 2) % 3;
 
-        // Sanity check if data matches parity
-        // Recalculate parity from data drives and compare to parity drive data
         uint8_t parity_check[DATA_SIZE];
         for (int i = 0; i < DATA_SIZE; i++) {
             parity_check[i] = buffers[data_drive1][i] ^ buffers[data_drive2][i];
@@ -130,19 +120,16 @@ void read_raid5_sector(char *data, int *sector, int *status) {
         if (memcmp(parity_check, buffers[parity_drive], DATA_SIZE) != 0) {
             fprintf(stderr, "Parity mismatch at sector %d\n", *sector);
             log_sector_error("Parity mismatch detected", *sector);
-            // Still, take data from one data drive
             memcpy(data, buffers[data_drive1], DATA_SIZE);
-            *status = 1; // Diverged or warning
+            *status = 1; 
             return;
         }
 
-        // Data is consistent, return data from first data drive
         memcpy(data, buffers[data_drive1], DATA_SIZE);
-        *status = 0; // valid
+        *status = 0; 
         return;
     }
 
-    // One drive corrupted: recover it by XOR of the other two
     int corrupted_drive = -1;
     for (int i = 0; i < 3; i++) {
         if (!valid[i]) {
@@ -151,28 +138,18 @@ void read_raid5_sector(char *data, int *sector, int *status) {
         }
     }
 
-    // Drives that are valid
     int valid_drive1 = (corrupted_drive + 1) % 3;
     int valid_drive2 = (corrupted_drive + 2) % 3;
 
-    // Reconstruct corrupted data by XOR of the other two
     for (int i = 0; i < DATA_SIZE; i++) {
         buffers[corrupted_drive][i] = buffers[valid_drive1][i] ^ buffers[valid_drive2][i];
     }
 
-    // We can’t verify checksum for the reconstructed sector, so skip it
-
-    // Return the recovered data (if corrupted drive is parity, data still on other drives)
-    // Return data from one of the valid data drives if corrupted drive is parity,
-    // else return reconstructed data
-
     int parity_drive = (*sector) % 3;
     if (corrupted_drive == parity_drive) {
-        // parity corrupted, data drives are intact, return data from a data drive
         int data_drive = (parity_drive + 1) % 3;
         memcpy(data, buffers[data_drive], DATA_SIZE);
     } else {
-        // one data drive corrupted, reconstruct data from parity and other data drive
         memcpy(data, buffers[corrupted_drive], DATA_SIZE);
     }
 
@@ -180,7 +157,7 @@ void read_raid5_sector(char *data, int *sector, int *status) {
     snprintf(logmsg, sizeof(logmsg), "Drive %d corrupted, data recovered by parity", corrupted_drive);
     log_sector_error(logmsg, *sector);
 
-    *status = 1; // recovered
+    *status = 1; 
 }
 
 int main() {
